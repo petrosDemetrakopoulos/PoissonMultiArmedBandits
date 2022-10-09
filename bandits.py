@@ -6,10 +6,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #Generate Data
-bandit1 = np.random.poisson(lam=2, size=10000)
-bandit2 = np.random.poisson(lam=3, size=10000)
-bandit3 = np.random.poisson(lam=3.5, size=10000)
-bandit4 = np.random.poisson(lam=10, size=10000)
+bandit1 = np.random.poisson(lam=3.18, size=1000)
+bandit2 = np.random.poisson(lam=3.19, size=1000)
+bandit3 = np.random.poisson(lam=3.2, size=1000)
+bandit4 = np.random.poisson(lam=3.21, size=1000)
+
+#MLE for lamdas
+lamda_estimations = [sum(x)/1000 for x in [bandit1, bandit2, bandit3, bandit4]]
+print(lamda_estimations)
+hist_achieved_rewards_ucb = []
+hist_achieved_rewards_lamda_ucb = []
 
 df = pd.DataFrame({"b1": bandit1, "b2": bandit2, "b3": bandit3, "b4": bandit4})
 sns.boxplot(x="variable", y="value", data=pd.melt(df[['b1','b2','b3','b4']]))
@@ -17,6 +23,7 @@ plt.title("Distribution of Rewards by Bandit \ Lamda")
 plt.show()
 
 def UCB():
+    global hist_achieved_rewards_ucb
     N = len(df.index)       # the time (or round) 
     d = 4                   # number of possible bandits
     Qt_a = 0
@@ -71,18 +78,22 @@ def UCB():
 
     print("Reward if we choose randonmly {0}".format(hist_random_choice_rewards[-1]))
     print("Reward of our UCB method {0}".format(hist_achieved_rewards[-1]))
+    hist_achieved_rewards_ucb = hist_achieved_rewards.copy()
     plt.bar(['b1','b2','b3','b4'],Nt_a)
     plt.title("Number of times each bandit was Selected (UCB)")
     plt.show()
 
 def lamdaUCB():
+    global hist_achieved_rewards_lamda_ucb
     N = len(df.index)
     d = 4 
+    c = 1
     Nt_a = np.zeros(d)      
 
     sum_rewards = np.zeros(d) 
    
-    hist_achieved_rewards = [] 
+    hist_t = [] #holds the natural log of each round
+    hist_achieved_rewards = []
     hist_best_possible_rewards = []
 
     for t in range(0,N):
@@ -90,16 +101,18 @@ def lamdaUCB():
         action_selected = 0
         for a in range(0, d):
             if (Nt_a[a] > 0):
-                #MLE for lamdas
-                ucb_value = sum_rewards[a]/Nt_a[a]
+                ln_t = math.log(t) #natural log of t
+                hist_t.append(ln_t) #to plot natural log of t
+
+                ucb_value = lamda_estimations[a] + c*(ln_t/Nt_a[a])
                 UCB_Values[a] = ucb_value
             #if this equals zero, choose as the maximum. Cant divide by negative     
             elif (Nt_a[a] == 0):
                 UCB_Values[a] = 1e500 #make large value
-        print(UCB_Values)
+
         #select the max UCB value
         action_selected = np.argmax(UCB_Values)
-        print("action selected: " + str(action_selected))
+
         #update Values as of round t
         Nt_a[action_selected] += 1
         reward = df.values[t, action_selected]
@@ -114,9 +127,20 @@ def lamdaUCB():
         else:
             hist_achieved_rewards.append(reward)
             hist_best_possible_rewards.append(r_best)
+
     print("Reward of our lamda-UCB method {0}".format(hist_achieved_rewards[-1]))
+    hist_achieved_rewards_lamda_ucb = hist_achieved_rewards.copy()
+
     plt.bar(['b1','b2','b3','b4'],Nt_a)
     plt.title("Number of times each bandit was Selected (lamda-UCB)")
     plt.show()
 UCB()
 lamdaUCB()
+
+plt.plot(range(df.shape[0]), hist_achieved_rewards_ucb, color='r', label='UCB')
+plt.plot(range(df.shape[0]), hist_achieved_rewards_lamda_ucb, color='g', label='lamdaUCB')
+plt.xlabel("Pulls")
+plt.ylabel("Rewards")
+plt.title("Reward for UCB and lamdaUCB")
+plt.legend()
+plt.show()
